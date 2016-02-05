@@ -86,8 +86,8 @@ declare module "pg-promise" {
   }
 
   /* To use with extend */
-  //export interface $MainExtend<T> {
-    //new (options: options) : (cn: ConfigurationObject | string) => T; 
-  //}
+  export interface $MainExtend<T> {
+    new (options: options) : (cn: ConfigurationObject | string) => T; 
+  }
 
 }
