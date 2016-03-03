@@ -50,7 +50,7 @@ declare module "pg-promise" {
       manyOrNone? : (q: string, vs: any[]) => Promise<any[]>;
       any?        : (q: string, vs: any[]) => Promise<any>;
       result?     : (q: string, vs: any[]) => any;
-      stream?     : (qs: any, init: (any) => (any)) => any;
+      stream?     : (qs: any, init: (stream: any) => (any)) => any;
       func?       : (fn: string, vs: any[], qrm: number) => Promise<any>;
       proc?       : (pn: string, vs: any[]) => any;
       task?       : (p1?: any, p2?: any) => any;
