@@ -11,6 +11,7 @@ declare module 'pg-promise' {
     import * as pg from 'pg-subset';
     import * as pgMinify from 'pg-minify';
     import XPromise = require('ext-promise'); // External Promise Provider
+    import { TlsOptions } from "tls";
 
     type TQueryFileOptions= {
         debug?:boolean,
@@ -233,13 +234,13 @@ declare module 'pg-promise' {
 
     // Database connection configuration interface;
     // See: https://github.com/brianc/node-postgres/blob/master/lib/connection-parameters.js#L36
-    interface IConfig {
+    export interface IConfig {
         host?:string,
         port?:number,
         database:string,
         user?:string,
         password?:string,
-        ssl?:boolean,
+        ssl?:TlsOptions,
         binary?:boolean,
         client_encoding?:string,
         application_name?:string,

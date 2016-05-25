@@ -7,5 +7,7 @@
     "typescript/pg-minify.d.ts",
     "typescript/pg-subset.d.ts"
   ],
-  "dependencies": {}
+  "globalDependencies": {
+    "node": "registry:dt/node#4.0.0+20160330064709"
+  }
 }

@@ -11,6 +11,8 @@
 
 declare module 'pg-subset' {
 
+    import { TlsOptions } from "tls";
+
     namespace pg {
         
         interface IColumn {
@@ -45,7 +47,7 @@ declare module 'pg-subset' {
             password:string;
             port:number;
             host:string;
-            ssl:boolean;
+            ssl:TlsOptions;
             binary:boolean;
             client_encoding:string;
             application_name:string;
@@ -101,7 +103,7 @@ declare module 'pg-subset' {
 
             client_encoding:string,
 
-            ssl:boolean,
+            ssl:TlsOptions,
 
             application_name?:string,
 
@@ -128,7 +130,7 @@ declare module 'pg-subset' {
             password:string;
             port:number;
             host:string;
-            ssl:boolean;
+            ssl:TlsOptions;
         }
 
         var defaults:IDefaults;
