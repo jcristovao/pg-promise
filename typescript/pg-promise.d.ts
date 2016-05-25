@@ -586,5 +586,5 @@ declare module 'pg-promise' {
     function pgPromise(options?:IOptions<IEmptyExt>):IMain;
     function pgPromise<Ext>(options?:IOptions<Ext>):IMain;
 
-    export=pgPromise;
+    export default pgPromise;
 }
