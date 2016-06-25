@@ -28,6 +28,9 @@
 
  */
 
+///<reference path='../../../typings/index' />
+import * as promise from 'bluebird';
+
 declare module 'ext-promise' {
     export=Promise; // Using ES6 Promise by default
 }
