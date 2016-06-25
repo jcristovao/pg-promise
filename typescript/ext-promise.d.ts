@@ -28,7 +28,6 @@
 
  */
 
-///<reference path='../../../typings/index' />
 import * as promise from 'bluebird';
 
 declare module 'ext-promise' {
