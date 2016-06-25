@@ -28,8 +28,7 @@
 
  */
 
-import * as promise from 'bluebird';
-
 declare module 'ext-promise' {
-    export=Promise; // Using ES6 Promise by default
+  import * as promise from 'bluebird';
+  export=Promise; // Using ES6 Promise by default
 }
