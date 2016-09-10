@@ -627,5 +627,5 @@ declare module 'pg-promise' {
     function pgPromise(options?: IOptions<IEmptyExt>): pgPromise.IMain;
     function pgPromise<Ext>(options?: IOptions<Ext>): pgPromise.IMain;
 
-    export=pgPromise;
+    export default pgPromise;
 }
