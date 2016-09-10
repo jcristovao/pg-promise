@@ -2,9 +2,9 @@
 
 import * as pgPromise from 'pg-promise';
 
-var pgp = pgPromise();
+var pgp:pgPromise.IMain = pgPromise();
 
-var db = pgp('connection');
+var db:pgPromise.IDatabase<any> = pgp('connection');
 
 var qrm = pgPromise.queryResult;
 
@@ -18,7 +18,7 @@ db.none('')
     .then(data=> {
     });
 
-db.one('')
+db.one('', [], value=>{}, 'this')
     .then(data=> {
         var value = data.value;
     });
@@ -33,7 +33,7 @@ db.many('')
         var value = data[0].ops;
     });
 
-db.result('')
+db.result('', [], ()=>{}, 123)
     .then(data=> {
         var value = data.rows[0].name;
     });

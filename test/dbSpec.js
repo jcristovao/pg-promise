@@ -1,5 +1,6 @@
 'use strict';
 
+var capture = require('./db/capture');
 var pgResult = require('pg/lib/result');
 var header = require('./db/header');
 var promise = header.defPromise;
@@ -14,16 +15,19 @@ function dummy() {
     // dummy/empty function;
 }
 
+var BatchError = pgp.spex.errors.BatchError;
+
 var $errors = {
     func: "Invalid function name.",
     query: "Invalid query format.",
+    emptyQuery: "Empty or undefined query.",
     notEmpty: "No return data was expected.",
     noData: "No data returned from the query.",
     multiple: "Multiple rows were not expected."
 };
 
 describe("Database Instantiation", function () {
-    it("must throw an error when empty or no connection passed", function () {
+    it("must throw an invalid connection passed", function () {
         var err = "Invalid connection details.";
         expect(pgp).toThrow(err);
         expect(function () {
@@ -32,10 +36,9 @@ describe("Database Instantiation", function () {
         expect(function () {
             pgp("");
         }).toThrow(err);
-    });
-    var testDB = pgp("invalid connection details");
-    it("must return a valid, though non-connectible object", function () {
-        expect(typeof(testDB)).toBe('object');
+        expect(function () {
+            pgp(123);
+        }).toThrow(err);
     });
 });
 
@@ -140,7 +143,7 @@ describe("Connection", function () {
                 }
             };
         });
-        describe("with direction connection", function () {
+        describe("using connect()", function () {
             beforeEach(function (done) {
                 dbErr.connect()
                     .then(dummy, function (error) {
@@ -208,6 +211,22 @@ describe("Connection", function () {
             } else {
                 expect(result.message).toContain('connect ECONNREFUSED');
             }
+        });
+    });
+
+    describe("direct end() call", function () {
+        var txt;
+        beforeEach(function (done) {
+            db.connect()
+                .then(function (obj) {
+                    var c = capture();
+                    obj.client.end();
+                    txt = c();
+                    done();
+                });
+        });
+        it("must be reported into the console", function () {
+            expect(txt).toContain('Abnormal client.end() call, due to invalid code or failed server connection.');
         });
     });
 
@@ -324,6 +343,66 @@ describe("Connection", function () {
             expect(error.message).toBe("Cannot execute a query on a disconnected client.");
         });
     });
+});
+
+describe("Direct Connection", function () {
+
+    describe("successful connection", function () {
+        var sco;
+        beforeEach(function (done) {
+            db.connect({direct: true})
+                .then(function (obj) {
+                    sco = obj;
+                    sco.done();
+                    done();
+                });
+        });
+        it("must connect correctly", function () {
+            expect(typeof sco).toBe('object');
+        });
+    });
+
+    describe("direct end() call", function () {
+        var txt;
+        beforeEach(function (done) {
+            db.connect({direct: true})
+                .then(function (obj) {
+                    var c = capture();
+                    obj.client.end();
+                    txt = c();
+                    done();
+                });
+        });
+        it("must be reported into the console", function () {
+            expect(txt).toContain('Abnormal client.end() call, due to invalid code or failed server connection.');
+        });
+    });
+
+    describe("for an invalid port", function () {
+        var errCN = JSON.parse(JSON.stringify(dbHeader.cn)); // dumb connection cloning;
+        errCN.port = '12345';
+        var dbErr = pgp(errCN), result;
+        beforeEach(function (done) {
+            dbErr.connect({direct: true})
+                .then(function () {
+                    result = null;
+                }, function (error) {
+                    result = error;
+                })
+                .finally(function () {
+                    done();
+                });
+        });
+        it("must report the right error", function () {
+            expect(result instanceof Error).toBe(true);
+            if (options.pgNative) {
+                expect(result.message).toContain('could not connect to server');
+            } else {
+                expect(result.message).toContain('connect ECONNREFUSED');
+            }
+        });
+    });
+
 });
 
 describe("Masked Connection Log", function () {
@@ -513,7 +592,7 @@ describe("Method 'none'", function () {
         }, "Query timed out", 5000);
         runs(function () {
             expect(error).toBeUndefined();
-            expect(result).toBeUndefined();
+            expect(result).toBe(null);
         });
     });
 
@@ -558,6 +637,25 @@ describe("Method 'one'", function () {
             expect(error).toBeUndefined();
             expect(typeof(result)).toBe('object');
             expect(result.value).toBe(123);
+        });
+    });
+
+    describe("value transformation", function () {
+        var result, context;
+        beforeEach(function (done) {
+            db.one('select count(*) from users', null, function (value) {
+                context = this;
+                return parseInt(value.count);
+            }, 123)
+                .then(function (data) {
+                    result = data;
+                    done();
+                });
+        });
+        it("must resolve with the new value", function () {
+            expect(typeof result).toBe('number');
+            expect(result > 0).toBe(true);
+            expect(context).toBe(123);
         });
     });
 
@@ -639,6 +737,25 @@ describe("Method 'oneOrNone'", function () {
         runs(function () {
             expect(error).toBeUndefined();
             expect(result).toBeNull();
+        });
+    });
+
+    describe("value transformation", function () {
+        var result, context;
+        beforeEach(function (done) {
+            db.oneOrNone('select count(*) from users', null, function (value) {
+                context = this;
+                return parseInt(value.count);
+            }, 123)
+                .then(function (data) {
+                    result = data;
+                    done();
+                });
+        });
+        it("must resolve with the new value", function () {
+            expect(typeof result).toBe('number');
+            expect(result > 0).toBe(true);
+            expect(context).toBe(123);
         });
     });
 
@@ -758,6 +875,7 @@ describe("Executing method query", function () {
             db.query(),
             db.query(''),
             db.query('   '),
+            db.query({}),
             db.query(1),
             db.query(null)])
             .then(function () {
@@ -770,12 +888,13 @@ describe("Executing method query", function () {
             return finished;
         }, "Query timed out", 5000);
         runs(function () {
-            expect(result.length).toBe(5);
-            expect(result[0]).toBe($errors.query);  // reject to an undefined query;
-            expect(result[1]).toBe($errors.query);  // reject to an empty-string query;
-            expect(result[2]).toBe($errors.query);  // reject to a white-space query string;
-            expect(result[3]).toBe($errors.query);  // reject to an invalid-type query;
-            expect(result[4]).toBe($errors.query);  // reject to a null query;
+            expect(result.length).toBe(6);
+            expect(result[0].message).toBe($errors.emptyQuery);  // reject to an undefined query;
+            expect(result[1].message).toBe($errors.emptyQuery);  // reject to an empty-string query;
+            expect(result[2].message).toBe($errors.query);  // reject to a white-space query string;
+            expect(result[3].message).toBe($errors.query);  // reject for an empty object;
+            expect(result[4].message).toBe($errors.query);  // reject to an invalid-type query;
+            expect(result[5].message).toBe($errors.emptyQuery);  // reject to a null query;
         });
     });
 
@@ -802,15 +921,10 @@ describe("Executing method query", function () {
         }, "Query timed out", 5000);
         runs(function () {
             expect(result.length).toBe(9);
-            expect(result[0]).toBe(error);  // reject for an empty string;
-            expect(result[1]).toBe(error);  // reject for number as a string;
-            expect(result[2]).toBe(error);  // reject for a negative integer;
-            expect(result[3]).toBe(error);  // reject for a 0;
-            expect(result[4]).toBe(error);  // reject for a large number;
-            expect(result[5]).toBe(error);  // reject for a NaN;
-            expect(result[7]).toBe(error);  // reject for Infinity;
-            expect(result[7]).toBe(error);  // reject for -Infinity;
-            expect(result[8]).toBe(error);  // reject for a float;
+            for (var i = 0; i < 9; i++) {
+                expect(result[i] instanceof TypeError).toBe(true);
+                expect(result[i].message).toBe(error);
+            }
         });
     });
 
@@ -873,7 +987,7 @@ describe("Transactions", function () {
                 ]);
             })
                 .catch(function (reason) {
-                    error = reason[1].result;
+                    error = reason.data[1].result;
                     done();
                 });
         });
@@ -936,7 +1050,7 @@ describe("Transactions", function () {
                 ]);
             })
                 .then(dummy, function (reason) {
-                    nestError = reason[1].result[1].result;
+                    nestError = reason.data[1].result.data[1].result;
                     return promise.all([
                         db.one('select count(*) from users where login=$1', 'External'), // 0 is expected;
                         db.one('select count(*) from users where login=$1', 'Internal') // 0 is expected;
@@ -1009,7 +1123,8 @@ describe("Transactions", function () {
                     });
             });
             it("must reject", function () {
-                expect(error).toBe("Callback function is required for the transaction.");
+                expect(error instanceof TypeError).toBe(true);
+                expect(error.message).toBe("Callback function is required for the transaction.");
             });
         });
         describe("for a task", function () {
@@ -1024,7 +1139,8 @@ describe("Transactions", function () {
                     });
             });
             it("must reject", function () {
-                expect(error).toBe("Callback function is required for the task.");
+                expect(error instanceof TypeError).toBe(true);
+                expect(error.message).toBe("Callback function is required for the task.");
             });
         });
 
@@ -1200,7 +1316,8 @@ describe("Queries must not allow invalid QRM (Query Request Mask) combinations",
         }, "Query timed out", 5000);
         runs(function () {
             expect(result).toBeNull();
-            expect(error).toBe("Invalid Query Result Mask specified.");
+            expect(error instanceof TypeError).toBe(true);
+            expect(error.message).toBe("Invalid Query Result Mask specified.");
         });
     });
     it("method 'query' must throw an error when QRM is > 6", function () {
@@ -1217,7 +1334,8 @@ describe("Queries must not allow invalid QRM (Query Request Mask) combinations",
         }, "Query timed out", 5000);
         runs(function () {
             expect(result).toBeNull();
-            expect(error).toBe("Invalid Query Result Mask specified.");
+            expect(error instanceof TypeError).toBe(true);
+            expect(error.message).toBe("Invalid Query Result Mask specified.");
         });
     });
     it("method 'query' must throw an error when QRM is < 1", function () {
@@ -1234,7 +1352,8 @@ describe("Queries must not allow invalid QRM (Query Request Mask) combinations",
         }, "Query timed out", 5000);
         runs(function () {
             expect(result).toBeNull();
-            expect(error).toBe("Invalid Query Result Mask specified.");
+            expect(error instanceof TypeError).toBe(true);
+            expect(error.message).toBe("Invalid Query Result Mask specified.");
         });
     });
 
@@ -1252,7 +1371,8 @@ describe("Queries must not allow invalid QRM (Query Request Mask) combinations",
         }, "Query timed out", 5000);
         runs(function () {
             expect(result).toBeNull();
-            expect(error).toBe("Invalid Query Result Mask specified.");
+            expect(error instanceof TypeError).toBe(true);
+            expect(error.message).toBe("Invalid Query Result Mask specified.");
         });
     });
 
@@ -1317,6 +1437,25 @@ describe("Querying a function", function () {
             expect(typeof(result)).toBe('object');
             expect('id' in result && 'login' in result && 'active' in result).toBe(true);
         })
+    });
+
+    describe("value transformation", function () {
+        var result, context;
+        beforeEach(function (done) {
+            db.proc('findUser', 1, function (value) {
+                context = this;
+                return value.id;
+            }, 123)
+                .then(function (data) {
+                    result = data;
+                    done();
+                });
+        });
+        it("must resolve with the new value", function () {
+            expect(typeof result).toBe('number');
+            expect(result > 0).toBe(true);
+            expect(context).toBe(123);
+        });
     });
 
     describe("with function-parameter that throws an error", function () {
@@ -1400,7 +1539,8 @@ describe("Querying a function", function () {
         it("must reject with the right error", function () {
             expect(result.length).toBe(8);
             for (var i = 0; i < result.length; i++) {
-                expect(result[i]).toBe($errors.func);
+                expect(result[i] instanceof Error).toBe(true);
+                expect(result[i].message).toBe($errors.func);
             }
         });
     });
@@ -1538,6 +1678,91 @@ describe("Task", function () {
             expect(counter).toBe(1); // successful notification 'Start', failed for 'Finish';
             expect(event && event.ctx && typeof event.ctx === 'object').toBeTruthy();
             expect(event.ctx.tag).toBe("testTag");
+        });
+    });
+
+});
+
+describe("negative query formatting", function () {
+
+    describe("with invalid property name", function () {
+        var error;
+        beforeEach(function (done) {
+            db.one('select ${invalid}', {})
+                .catch(function (e) {
+                    error = e;
+                    done();
+                });
+        });
+        it("must reject with correct error", function () {
+            expect(error instanceof Error).toBe(true);
+            expect(error.message).toBe("Property 'invalid' doesn't exist.");
+        });
+    });
+
+    describe("with invalid variable index", function () {
+        var error;
+        beforeEach(function (done) {
+            db.one('select $1', [])
+                .catch(function (e) {
+                    error = e;
+                    done();
+                });
+        });
+        it("must reject with correct error", function () {
+            expect(error instanceof RangeError).toBe(true);
+            expect(error.message).toBe("Variable $1 out of range. Parameters array length: 0");
+        });
+    });
+
+    describe("with formatting parameter throwing error", function () {
+        var error;
+        beforeEach(function (done) {
+            db.one('select $1', [function () {
+                throw new Error("ops!");
+            }])
+                .catch(function (e) {
+                    error = e;
+                    done();
+                });
+        });
+        it("must reject with correct error", function () {
+            expect(error instanceof Error).toBe(true);
+            expect(error.message).toBe("ops!");
+        });
+    });
+
+    describe("with formatting parameter throwing value", function () {
+        var error;
+        beforeEach(function (done) {
+            db.one('select $1', [function () {
+                throw 123;
+            }])
+                .catch(function (e) {
+                    error = e;
+                    done();
+                });
+        });
+        it("must reject with correct error", function () {
+            expect(error).toBe(123);
+        });
+    });
+
+    describe("with formatting parameter throwing undefined", function () {
+        var error, handled;
+        beforeEach(function (done) {
+            db.one('select $1', [function () {
+                throw undefined;
+            }])
+                .catch(function (e) {
+                    handled = true;
+                    error = e;
+                    done();
+                });
+        });
+        it("must reject with correct error", function () {
+            expect(handled).toBe(true);
+            expect(error).toBeUndefined();
         });
     });
 

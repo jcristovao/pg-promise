@@ -1,5 +1,6 @@
 'use strict';
 
+var path = require('path');
 var fs = require('fs');
 var LB = require('os').EOL;
 var minify = require('pg-minify');
@@ -15,12 +16,16 @@ var db = dbHeader.db;
 var QueryFileError = pgp.errors.QueryFileError;
 var QueryFile = pgp.QueryFile;
 
-var sqlSimple = './test/sql/simple.sql';
-var sqlUsers = './test/sql/allUsers.sql';
-var sqlUnknown = './test/sql/unknown.sql';
-var sqlInvalid = './test/sql/invalid.sql';
-var sqlParams = './test/sql/params.sql';
-var sqlTemp = './test/sql/temp.sql';
+var sqlSimple = getPath('./sql/simple.sql');
+var sqlUsers = getPath('./sql/allUsers.sql');
+var sqlUnknown = getPath('./sql/unknown.sql');
+var sqlInvalid = getPath('./sql/invalid.sql');
+var sqlParams = getPath('./sql/params.sql');
+var sqlTemp = getPath('./sql/temp.sql');
+
+function getPath(file) {
+    return path.join(__dirname, file);
+}
 
 describe("QueryFile / Positive:", function () {
 
@@ -163,11 +168,9 @@ describe("QueryFile / Positive:", function () {
         // this is just for code coverage;
         it("must not read again", function () {
             var qf = new QueryFile(sqlSimple, {debug: false, minify: true});
-            var res1 = qf.prepare();
-            var res2 = qf.prepare();
+            qf.prepare();
+            qf.prepare();
             expect(qf.query).toBe('select 1;');
-            expect(res1).toBe(true);
-            expect(res2).toBe(true);
         });
     });
 });
@@ -198,7 +201,7 @@ describe("QueryFile / Negative:", function () {
     });
 
     describe("accessing a temporary file", function () {
-        var query = "select 123 as value";
+        var error, query = "select 123 as value";
         it("must result in error once deleted", function () {
             fs.writeFileSync(sqlTemp, query);
             var qf = new QueryFile(sqlTemp, {debug: true});
@@ -209,7 +212,24 @@ describe("QueryFile / Negative:", function () {
             expect(qf.query).toBeUndefined();
             expect(qf.error instanceof Error).toBe(true);
         });
+
+        it("must throw when preparing", function () {
+            fs.writeFileSync(sqlTemp, query);
+            var qf = new QueryFile(sqlTemp, {debug: true});
+            expect(qf.query).toBe(query);
+            expect(qf.error).toBeUndefined();
+            fs.unlinkSync(sqlTemp);
+            try {
+                qf.prepare(true);
+            } catch (e) {
+                error = e;
+            }
+            expect(qf.query).toBeUndefined();
+            expect(error instanceof Error).toBe(true);
+        });
+
     });
+
 
     describe("invalid sql", function () {
         it("must throw an error", function () {

@@ -1,5 +1,6 @@
 'use strict';
 
+var path = require('path');
 var pgp = require('../lib/index');
 
 var dateSample = new Date();
@@ -16,6 +17,13 @@ var errors = {
         return "'" + value + "' is not a Buffer object."
     }
 };
+
+var sqlSimple = getPath('./sql/simple.sql');
+var sqlParams = getPath('./sql/params.sql');
+
+function getPath(file) {
+    return path.join(__dirname, file);
+}
 
 var dummy = function () {
 };
@@ -574,20 +582,19 @@ describe("Method as.func", function () {
 describe("Method as.name", function () {
 
     describe("with an empty or non-string", function () {
-        var error = new TypeError("An sql name/identifier must be a non-empty text string.");
         it("must throw na error", function () {
             expect(function () {
                 pgp.as.name();
-            }).toThrow(error);
+            }).toThrow(new TypeError('Invalid sql name: undefined'));
             expect(function () {
                 pgp.as.name(null);
-            }).toThrow(error);
+            }).toThrow(new TypeError('Invalid sql name: null'));
             expect(function () {
                 pgp.as.name(123);
-            }).toThrow(error);
+            }).toThrow(new TypeError('Invalid sql name: 123'));
             expect(function () {
                 pgp.as.name('');
-            }).toThrow(error);
+            }).toThrow(new TypeError('Invalid sql name: ""'));
         });
     });
 
@@ -610,6 +617,14 @@ describe("Method as.name", function () {
             expect(pgp.as.name(getName)).toBe('"name"');
         });
     });
+
+    describe("with *", function () {
+        it("must return the original string", function () {
+            expect(pgp.as.name('*')).toBe('*');
+            expect(pgp.as.name(' \t *\t ')).toBe(' \t *\t ');
+        });
+    });
+
 });
 
 describe("Method as.format", function () {
@@ -617,12 +632,6 @@ describe("Method as.format", function () {
     it("must return a correctly formatted string", function () {
 
         expect(pgp.as.format("", [])).toBe("");
-
-        expect(pgp.as.format("$1", [], {partial: true})).toBe("$1");
-
-        expect(pgp.as.format("$1^", [], {partial: true})).toBe("$1^");
-
-        expect(pgp.as.format("$1:raw", [], {partial: true})).toBe("$1:raw");
 
         expect(pgp.as.format("$1")).toBe("$1");
         expect(pgp.as.format("$1", null)).toBe("null");
@@ -764,6 +773,87 @@ describe("Method as.format", function () {
             pgp.as.format("$3", [1, 2]);
         }).toThrow(new RangeError(errors.range("$3", 2)));
 
+    });
+
+    describe("formatting options", function () {
+
+        describe("partial", function () {
+            it("must skip missing variables", function () {
+                expect(pgp.as.format("$1", [], {partial: true})).toBe("$1");
+                expect(pgp.as.format("$1^", [], {partial: true})).toBe("$1^");
+                expect(pgp.as.format("$1:raw", [], {partial: true})).toBe("$1:raw");
+
+            });
+        });
+
+        describe("default", function () {
+            it("must replace missing variables", function () {
+                expect(pgp.as.format("$1, $2", [1], {default: undefined})).toBe("1, null");
+                expect(pgp.as.format("$1, $2", [1], {default: null})).toBe("1, null");
+                expect(pgp.as.format("${present}, ${missing}", {present: 1}, {default: 2})).toBe("1, 2");
+            });
+            it("must invoke a callback correctly", function () {
+                var value, context, param;
+
+                function cb(v, p) {
+                    context = this;
+                    value = v;
+                    param = p;
+                    return 123;
+                }
+
+                var arr = ['hi'];
+                expect(pgp.as.format("$1, $2", arr, {default: cb})).toBe("'hi', 123");
+                expect(context === arr).toBe(true);
+                expect(param === arr).toBe(true);
+                expect(value).toBe(1);
+
+                var obj = {first: 'f'};
+                expect(pgp.as.format("${first}, ${  second^ \t}", obj, {default: cb})).toBe("'f', 123");
+                expect(context === obj).toBe(true);
+                expect(param === obj).toBe(true);
+                expect(value).toBe('second');
+
+            });
+        });
+
+    });
+
+    describe("QueryFile - positive", function () {
+        it("must format the object", function () {
+            var qf = new pgp.QueryFile(sqlParams, {debug: false, minify: true});
+            expect(pgp.as.format(qf, {
+                column: 'col',
+                schema: 'sc',
+                table: 'tab'
+            })).toBe('SELECT "col" FROM "sc"."tab"');
+        });
+
+        it("must format the type as a parameter", function () {
+            var qf = new pgp.QueryFile(sqlSimple, {debug: false, minify: true});
+            expect(pgp.as.format('$1', [qf])).toBe("'select 1;'");
+            expect(pgp.as.format('$1^', qf)).toBe("select 1;");
+            expect(pgp.as.format('$1#', qf)).toBe("select 1;");
+        });
+
+    });
+
+    describe("QueryFile - negative", function () {
+        it("must throw QueryFileError", function () {
+            var error1, error2, qf = new pgp.QueryFile('bla-bla');
+            try {
+                pgp.as.format(qf);
+            } catch (e) {
+                error1 = e;
+            }
+            try {
+                pgp.as.format('$1', [qf]);
+            } catch (e) {
+                error2 = e;
+            }
+            expect(error1 instanceof pgp.errors.QueryFileError).toBe(true);
+            expect(error2 instanceof pgp.errors.QueryFileError).toBe(true);
+        });
     });
 
 });
@@ -1131,12 +1221,65 @@ describe("SQL Names", function () {
         });
     });
 
-    describe("with a wrong object type", function () {
-        it("must reject the object with an error", function () {
-            expect(function () {
-                pgp.as.format('$1~', [{}]);
-            }).toThrow(new TypeError("An sql name/identifier must be a non-empty text string."));
+    describe("with an object", function () {
+        it("must enumerate properties", function () {
+            expect(pgp.as.format('$1~', [{one: 1, two: 2}])).toBe('"one","two"');
         });
     });
 
+    describe("with an array", function () {
+        it("must enumerate properties", function () {
+            expect(pgp.as.format('$1~', [['one', 'two']])).toBe('"one","two"');
+        });
+    });
+
+    describe("Negative", function () {
+
+        describe("with the wrong object type", function () {
+            it("must reject the object with an error", function () {
+                expect(function () {
+                    pgp.as.format('$1~', [123]);
+                }).toThrow(new TypeError('Invalid sql name: 123'));
+                expect(function () {
+                    pgp.as.format('$1~', [true]);
+                }).toThrow(new TypeError('Invalid sql name: true'));
+                expect(function () {
+                    pgp.as.format('$1~', ['']);
+                }).toThrow(new TypeError('Invalid sql name: ""'));
+            });
+        });
+
+        describe("with an empty object", function () {
+            it("must reject the object with an error", function () {
+                expect(function () {
+                    pgp.as.format('$1~', [{}]);
+                }).toThrow(new TypeError("Cannot retrieve sql names from an empty array/object."));
+            });
+        });
+
+        describe("with an empty array", function () {
+            it("must reject the array with an error", function () {
+                expect(function () {
+                    pgp.as.format('$1~', [[]]);
+                }).toThrow(new TypeError("Cannot retrieve sql names from an empty array/object."));
+            });
+        });
+
+        describe("with invalid property", function () {
+            it("must reject the property", function () {
+                expect(function () {
+                    pgp.as.format('$1~', [{'': 1}]);
+                }).toThrow(new TypeError('Invalid sql name: ""'));
+            });
+        });
+
+        describe("with invalid array value", function () {
+            it("must reject the value", function () {
+                expect(function () {
+                    pgp.as.format('$1~', [[1]]);
+                }).toThrow(new TypeError('Invalid sql name: 1'));
+            });
+        });
+
+    });
 });

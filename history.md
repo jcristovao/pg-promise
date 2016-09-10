@@ -1,5 +1,13 @@
-### History of Changes
+### Release History
 
+* 5.2.0 Integrating type [QueryFile] directly into the query-formatting engine. Released: July 15, 2016.
+* 5.0.0 Change over to the new version of [spex] 1.0, with new rejection protocol. Released: June 26, 2016.
+* 4.8.0 Major refactoring for the entire rejection mechanism to adhere to better promise standards. Released: June 23, 2016.
+* 4.7.0 Added diagnostics for invalid use of the library. Released: June 18, 2016
+* 4.6.0 Extending all single-result query methods, plus exposing the [spex] instance. Released: June 10, 2016
+* 4.5.0 Removed support for Configuration Files, set pg dependency to 5.x. Released: June 8, 2016  
+* 4.4.2 Added support for [Configuration Path]. Released: June 5, 2016
+* 4.4.0 Added namespace [utils] for automatic SQL tree generation. Released: June 3, 2016
 * 4.3.0 Improving [PreparedStatement] and [ParameterizedQuery], adding methods [map] and [each] to the database protocol. Released: May 25, 2016
 * 4.1.0 Adding [helpers] namespace with additional query-formatting methods. Released: May 12, 2016
 * 4.0.0 Consolidating the entire error-reporting mechanism. Released: April 24, 2016
@@ -64,6 +72,8 @@
 * 0.0.1 initial draft. March 3rd, 2015.
 
 
+[spex]:https://github.com/vitaly-t/spex
+[utils]:http://vitaly-t.github.io/pg-promise/utils.html
 [each]:http://vitaly-t.github.io/pg-promise/Database.html#.each
 [map]:http://vitaly-t.github.io/pg-promise/Database.html#.map
 [Connection Syntax]:https://github.com/vitaly-t/pg-promise/wiki/Connection-Syntax

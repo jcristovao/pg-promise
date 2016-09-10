@@ -2,11 +2,18 @@
 
 import * as pgPromise from 'pg-promise';
 
-var pgp = pgPromise({
+var pgp:pgPromise.IMain = pgPromise({
     capSQL: true,
     pgFormatting: true,
     pgNative: true
 });
+
+var c:pgPromise.IConfig;
+c.binary = true;
+
+var spex = pgp.spex;
+
+var b = spex.batch([1, 2, 3]);
 
 interface Test {
     hello:string;

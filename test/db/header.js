@@ -33,14 +33,21 @@ function main(options, dc) {
             }
         }
     }
+
+    if (options && typeof options === 'object') {
+        options.noWarnings = true;
+    }
+
     var result = {
         pgpLib: pgpLib,
         pgp: pgpLib(options),
         cn: cn
     };
+    result.pgp.pg.setMaxListeners(100);
     result.db = result.pgp(cn, dc);
     return result;
 }
+
 main.defPromise = defPromise;
 
 module.exports = main;
