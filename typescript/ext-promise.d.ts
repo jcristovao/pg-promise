@@ -30,8 +30,9 @@
 
 
 /// <reference path='../typings/index' />
-import * as Promise from 'bluebird';
 
 declare module 'ext-promise' {
+    import * as Promise from 'bluebird';
+
     export=Promise; // Using Bluebird Promises
 }
